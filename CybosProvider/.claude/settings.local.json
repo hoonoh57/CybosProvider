@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe\" CybosProvider.vbproj /p:Configuration=Debug /t:Build /v:minimal)",
+      "Bash(\"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\MSBuild\\Current\\Bin\\MSBuild.exe\" CybosProvider.vbproj /p:Configuration=Debug /t:Build /v:m)",
+      "Bash(Select-String -Pattern \"error|warning\" -Context 0,2)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe\" CybosProvider.vbproj //p:Configuration=Debug //t:Build //v:m)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
