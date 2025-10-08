@@ -141,7 +141,13 @@ Public Class HighPerformanceChartControl
             Invalidate() ' 화면 다시 그리기 → DrawPanelInfo에서 새 위치로 표시
         End If
     End Sub
-
+            
+' HighPerformanceChartControl 내부
+Private _strategyLabelColor As Color = Color.Red
+Public Sub SetStrategyLabelColor(c As Color)
+    _strategyLabelColor = c
+    Invalidate()
+End Sub
 
     ' ===== 인디케이터 관리 =====
 
