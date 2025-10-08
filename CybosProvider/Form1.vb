@@ -1,4 +1,6 @@
 Imports System.Linq
+Imports System.Drawing
+Imports System.Reflection
 
 Public Class Form1
     ' === Strategy integration fields ===
@@ -28,7 +30,7 @@ Public Class Form1
         Dim startDate As Date = dtpStart.Value
         _tickCandles = Await New CybosDataProvider().DownloadTickCandles(code, startDate)
         dgvTickCandles.DataSource = _tickCandles
-        Logger.Instance.log($"Æ½ µ¥ÀÌÅÍ ´Ù¿î·Îµå ¿Ï·á: {_tickCandles.Count}°³")
+        Logger.Instance.log($"í‹± ë°ì´í„° ë‹¤ìš´ë¡œë“œ ì™„ë£Œ: {_tickCandles.Count}ê°œ")
     End Sub
 
     Private Sub Form1_Load(sender As Object, e As EventArgs) Handles Me.Load
@@ -63,7 +65,7 @@ Public Class Form1
     End Sub
     Private Sub btnConvert_Click(sender As Object, e As EventArgs) Handles btnConvert.Click
         If _tickCandles Is Nothing OrElse _tickCandles.Count = 0 Then
-            MessageBox.Show("¸ÕÀú Æ½ µ¥ÀÌÅÍ¸¦ ´Ù¿î·ÎµåÇØÁÖ¼¼¿ä.", "¾Ë¸²")
+            MessageBox.Show("ë¨¼ì € í‹± ë°ì´í„°ë¥¼ ë‹¤ìš´ë¡œë“œí•´ì£¼ì„¸ìš”.", "ì•Œë¦¼")
             Return
         End If
 
@@ -76,21 +78,21 @@ Public Class Form1
 
         InitializeChartWithDefaults(_chart, _candles)
 
-        ' Æ®·¢¹Ù ¼³Á¤
+        ' íŠ¸ë™ë°” ì„¤ì •
         If _candles.Count > 0 Then
             TrackBar1.Minimum = 10
             TrackBar1.Maximum = _candles.Count - 1
             TrackBar1.Value = _candles.Count - 1
         End If
 
-        Logger.Instance.log($"º¯È¯ ¿Ï·á: {_candles.Count}°³ {timeFrame} Äµµé")
+        Logger.Instance.log($"ë³€í™˜ ì™„ë£Œ: {_candles.Count}ê°œ {timeFrame} ìº”ë“¤")
         If chkApplyStrategy IsNot Nothing AndAlso chkApplyStrategy.Checked Then
             Dim forceFull As Boolean = (chkDisplaySignals IsNot Nothing AndAlso chkDisplaySignals.Checked)
             Dim syncSim As Boolean = (Not forceFull) AndAlso (chkSimulation IsNot Nothing AndAlso chkSimulation.Checked AndAlso _applyMode = StrategyApplyMode.SimulationFollow)
             RefreshStrategyOverlay(simulationSync:=syncSim, forceFull:=forceFull)
         Else
             _lastStrategyLogSignature = String.Empty
-            _chart.SetStrategyLabel(String.Empty)
+            UpdateStrategyApplyBadge()
         End If
     End Sub
     Private Function ConvertToTargetCandles(timeframe As String) As List(Of CandleInfo)
@@ -112,7 +114,7 @@ Public Class Form1
             Case "T"
                 candles = AggregateToTickCandles(_tickCandles, interval)
             Case Else
-                MessageBox.Show("ÀÏºÀ, ÁÖºÀ, ¿ùºÀÀº ¾ÆÁ÷ ±¸ÇöµÇÁö ¾Ê¾Ò½À´Ï´Ù.", "¾Ë¸²")
+                MessageBox.Show("ì¼ë´‰, ì£¼ë´‰, ì›”ë´‰ì€ ì•„ì§ êµ¬í˜„ë˜ì§€ ì•Šì•˜ìŠµë‹ˆë‹¤.", "ì•Œë¦¼")
         End Select
 
         Return candles
@@ -125,7 +127,7 @@ Public Class Form1
     Private Sub chkSimulation_CheckedChanged(sender As Object, e As EventArgs) Handles chkSimulation.CheckedChanged
         If _candles Is Nothing OrElse _candles.Count = 0 Then
             chkSimulation.Checked = False
-            MessageBox.Show("¸ÕÀú Â÷Æ®¸¦ »ı¼ºÇÏ¼¼¿ä.", "¾Ë¸²")
+            MessageBox.Show("ë¨¼ì € ì°¨íŠ¸ë¥¼ ìƒì„±í•˜ì„¸ìš”.", "ì•Œë¦¼")
             Return
         End If
         _lastStrategyLogSignature = String.Empty
@@ -136,7 +138,7 @@ Public Class Form1
             FlowLayoutPanel3.Visible = True
             _chart.SetSimulationMode(True)
 
-            ' ½ÃÀÛ À§Ä¡¸¦ 20% ÁöÁ¡À¸·Î
+            ' ì‹œì‘ ìœ„ì¹˜ë¥¼ 20% ì§€ì ìœ¼ë¡œ
             Dim startIndex = Math.Max(10, CInt(_candles.Count * 0.2))
             _chart.SetSimulationIndex(startIndex)
             TrackBar1.Value = startIndex
@@ -150,14 +152,14 @@ Public Class Form1
 
             If _tmrSimulation.Enabled Then
                 _tmrSimulation.Stop()
-                btnPlayPause.Text = "¢º"
+                btnPlayPause.Text = "â–¶"
                 btnPlayPause.BackColor = Color.SteelBlue
             End If
             If chkApplyStrategy IsNot Nothing AndAlso chkApplyStrategy.Checked Then
                 Dim forceFull As Boolean = (chkDisplaySignals IsNot Nothing AndAlso chkDisplaySignals.Checked)
                 RefreshStrategyOverlay(simulationSync:=False, forceFull:=forceFull)
             Else
-                _chart.SetStrategyLabel(String.Empty)
+                UpdateStrategyApplyBadge()
             End If
         End If
 
@@ -194,7 +196,7 @@ Public Class Form1
     Private Sub btnPlayPause_Click(sender As Object, e As EventArgs) Handles btnPlayPause.Click
         If _tmrSimulation.Enabled Then
             _tmrSimulation.Stop()
-            btnPlayPause.Text = "¢º"
+            btnPlayPause.Text = "â–¶"
             btnPlayPause.BackColor = Color.SteelBlue
         Else
             _tmrSimulation.Start()
@@ -206,16 +208,16 @@ Public Class Form1
     Private Sub _tmrSimulation_Tick(sender As Object, e As EventArgs) Handles _tmrSimulation.Tick
         If Not _chart.MoveNextCandle() Then
             _tmrSimulation.Stop()
-            btnPlayPause.Text = "¢º"
+            btnPlayPause.Text = "â–¶"
             btnPlayPause.BackColor = Color.SteelBlue
-            MessageBox.Show("½Ã¹Ä·¹ÀÌ¼ÇÀÌ ¿Ï·áµÇ¾ú½À´Ï´Ù.", "¾Ë¸²")
+            MessageBox.Show("ì‹œë®¬ë ˆì´ì…˜ì´ ì™„ë£Œë˜ì—ˆìŠµë‹ˆë‹¤.", "ì•Œë¦¼")
         Else
             UpdateSimulationInfo()
         End If
 
         RefreshStrategyOverlayDuringSimulation()
 
-        ' Àü·« ½Ã±×³Î µ¿±âÈ­(½Ã¹Ä ¿¬µ¿ ¸ğµåÀÏ ¶§¸¸)
+        ' ì „ëµ ì‹œê·¸ë„ ë™ê¸°í™”(ì‹œë®¬ ì—°ë™ ëª¨ë“œì¼ ë•Œë§Œ)
     End Sub
 
     Private Sub RefreshStrategyOverlayDuringSimulation()
@@ -241,7 +243,7 @@ Public Class Form1
         UpdateSimulationInfo()
         RefreshStrategyOverlayDuringSimulation()
 
-        ' Àü·« ½Ã±×³Î µ¿±âÈ­(½Ã¹Ä ¿¬µ¿ ¸ğµåÀÏ ¶§¸¸)
+        ' ì „ëµ ì‹œê·¸ë„ ë™ê¸°í™”(ì‹œë®¬ ì—°ë™ ëª¨ë“œì¼ ë•Œë§Œ)
     End Sub
 
     Private Sub OnSimulationIndexChanged(currentIndex As Integer, maxIndex As Integer)
@@ -256,20 +258,20 @@ Public Class Form1
         Dim info = _chart.GetSimulationInfo()
         If info.CurrentIndex >= 0 AndAlso info.CurrentIndex < _candles.Count Then
             Dim currentCandle = _candles(info.CurrentIndex)
-            Label4.Text = $"½Ã¹Ä·¹ÀÌ¼Ç: {info.CurrentIndex}/{info.MaxIndex} ({info.Percentage:F1}%) | {currentCandle.Timestamp:yyyy-MM-dd HH:mm}"
+            Label4.Text = $"ì‹œë®¬ë ˆì´ì…˜: {info.CurrentIndex}/{info.MaxIndex} ({info.Percentage:F1}%) | {currentCandle.Timestamp:yyyy-MM-dd HH:mm}"
         End If
     End Sub
 
 #End Region
 
     Private Sub RegisterStrategies()
-        ' 1. ±âº» Àü·« µî·Ï
+        ' 1. ê¸°ë³¸ ì „ëµ ë“±ë¡
         Dim s As New M1_Ema200_Tick_Rsi7_Macd_Strategy()
         _strategies.Clear()
         _strategies.Add(s)
         _currentStrategy = s
 
-        ' 2. »ç¿ëÀÚ ÄŞº¸¹Ú½º ¹ß°ß(µğÀÚÀÌ³Ê¿¡ ÀÌ¹Ì Ãß°¡µÇ¾î ÀÖÀ» ¼ö ÀÖÀ½)
+        ' 2. ì‚¬ìš©ì ì½¤ë³´ë°•ìŠ¤ ë°œê²¬(ë””ìì´ë„ˆì— ì´ë¯¸ ì¶”ê°€ë˜ì–´ ìˆì„ ìˆ˜ ìˆìŒ)
         If _cmbStrategy Is Nothing Then
             Dim found = Me.Controls.Find("cmbStrategy", True)
             If found IsNot Nothing AndAlso found.Length > 0 Then
@@ -285,26 +287,26 @@ Public Class Form1
             If _cmbStrategy.Items.Count > 0 Then
                 _cmbStrategy.SelectedIndex = 0
             End If
-            ' ·±Å¸ÀÓ ÀÌº¥Æ® ÇÚµé·¯ ¿¬°á
+            ' ëŸ°íƒ€ì„ ì´ë²¤íŠ¸ í•¸ë“¤ëŸ¬ ì—°ê²°
             AddHandler _cmbStrategy.SelectedIndexChanged, AddressOf cmbStrategy_SelectedIndexChanged
         End If
     End Sub
     Private Sub CreateStrategyToggles()
-        ' Ã¼Å©¹Ú½º(Àü·« Àû¿ë Åä±Û)
+        ' ì²´í¬ë°•ìŠ¤(ì „ëµ ì ìš© í† ê¸€)
         chkApplyStrategy = New CheckBox() With {
             .Name = "chkApplyStrategy",
-            .Text = "Àü·« Àû¿ë",
+            .Text = "ì „ëµ ì ìš©",
             .AutoSize = True
         }
         chkApplyStrategy.Checked = False
         AddHandler chkApplyStrategy.CheckedChanged, AddressOf chkApplyStrategy_CheckedChanged
 
-        ' Àû¿ë ¹üÀ§ ÄŞº¸(ÀüÃ¼Â÷Æ® / ½Ã¹Ä¿¬µ¿)
+        ' ì ìš© ë²”ìœ„ ì½¤ë³´(ì „ì²´ì°¨íŠ¸ / ì‹œë®¬ì—°ë™)
         _cmbStrategyScope = New ComboBox() With {
             .Name = "cmbStrategyScope",
             .DropDownStyle = ComboBoxStyle.DropDownList
         }
-        _cmbStrategyScope.Items.AddRange(New Object() {"ÀüÃ¼Â÷Æ®", "½Ã¹Ä¿¬µ¿"})
+        _cmbStrategyScope.Items.AddRange(New Object() {"ì „ì²´ì°¨íŠ¸", "ì‹œë®¬ì—°ë™"})
         _cmbStrategyScope.SelectedIndex = 0
         AddHandler _cmbStrategyScope.SelectedIndexChanged, Sub(sender As Object, e As EventArgs)
                                                                _applyMode = If(_cmbStrategyScope.SelectedIndex = 0, StrategyApplyMode.FullChart, StrategyApplyMode.SimulationFollow)
@@ -316,14 +318,14 @@ Public Class Form1
                                                                End If
                                                            End Sub
 
-        ' ¹èÄ¡: ½Ã¹Ä ÆĞ³ÎÀÌ ÀÖÀ¸¸é ±× µÚ¿¡, ¾øÀ¸¸é Æû ÁÂ»ó´Ü
+        ' ë°°ì¹˜: ì‹œë®¬ íŒ¨ë„ì´ ìˆìœ¼ë©´ ê·¸ ë’¤ì—, ì—†ìœ¼ë©´ í¼ ì¢Œìƒë‹¨
         Dim host As Control = Nothing
         Dim found = Me.Controls.Find("FlowLayoutPanel3", True)
         If found IsNot Nothing AndAlso found.Length > 0 Then host = found(0)
         If host Is Nothing Then host = Me
 
     End Sub
-    ' Àü·« ÄŞº¸ º¯°æ ¡æ ÇöÀç Àü·« ±³Ã¼ ÈÄ Åä±ÛÀÌ ÄÑÁ® ÀÖÀ¸¸é ¿À¹ö·¹ÀÌ °»½Å
+    ' ì „ëµ ì½¤ë³´ ë³€ê²½ â†’ í˜„ì¬ ì „ëµ êµì²´ í›„ í† ê¸€ì´ ì¼œì ¸ ìˆìœ¼ë©´ ì˜¤ë²„ë ˆì´ ê°±ì‹ 
     Private Sub cmbStrategy_SelectedIndexChanged(sender As Object, e As EventArgs) Handles cmbStrategy.SelectedIndexChanged
         Try
             If cmbStrategy Is Nothing OrElse cmbStrategy.SelectedIndex < 0 Then Exit Sub
@@ -343,11 +345,11 @@ Public Class Form1
                 RefreshStrategyOverlay(simulationSync:=syncSim, forceFull:=forceFull)
             End If
         Catch
-            ' ÇÊ¿ä ½Ã ·Î±ë
+            ' í•„ìš” ì‹œ ë¡œê¹…
         End Try
     End Sub
 
-    ' Àü·« Àû¿ë Åä±Û ¿Â/¿ÀÇÁ
+    ' ì „ëµ ì ìš© í† ê¸€ ì˜¨/ì˜¤í”„
     Private Sub chkApplyStrategy_CheckedChanged(sender As Object, e As EventArgs) Handles chkApplyStrategy.CheckedChanged
         Try
             If chkApplyStrategy.Checked Then
@@ -359,9 +361,9 @@ Public Class Form1
                 If chkDisplaySignals IsNot Nothing AndAlso chkDisplaySignals.Checked Then
                     chkDisplaySignals.Checked = False
                 End If
-                _chart.SetStrategyLabel(String.Empty)
+                UpdateStrategyApplyBadge()
                 _lastStrategyLogSignature = String.Empty
-                ' Àü·« ÇØÁ¦: ±âº» ÁöÇ¥¸¸ º¹¿ø
+                ' ì „ëµ í•´ì œ: ê¸°ë³¸ ì§€í‘œë§Œ ë³µì›
                 If _candles IsNot Nothing AndAlso _candles.Count > 0 Then
                     Dim simOn As Boolean = False
                     Dim simIndex As Integer = 0
@@ -404,12 +406,12 @@ Public Class Form1
         Return New List(Of TradeSignal)(copy)
     End Function
 
-    ' === Àü·« °á°ú¸¦ Â÷Æ®¿¡ ¿À¹ö·¹ÀÌ (Æ©ÇÃ ºñ±³ ¼öÁ¤ + LINQ ¾øÀÌ ±¸Çö) ===
+    ' === ì „ëµ ê²°ê³¼ë¥¼ ì°¨íŠ¸ì— ì˜¤ë²„ë ˆì´ (íŠœí”Œ ë¹„êµ ìˆ˜ì • + LINQ ì—†ì´ êµ¬í˜„) ===
     Private Sub RefreshStrategyOverlay(Optional simulationSync As Boolean = False, Optional forceFull As Boolean = False)
         Try
-            ' µ¥ÀÌÅÍ/Àü·« È®ÀÎ
+            ' ë°ì´í„°/ì „ëµ í™•ì¸
             If _candles Is Nothing OrElse _candles.Count = 0 Then
-                _chart.SetStrategyLabel(String.Empty)
+                UpdateStrategyApplyBadge()
                 _lastStrategyLogSignature = String.Empty
                 Exit Sub
             End If
@@ -421,14 +423,14 @@ Public Class Form1
                 Next
             End If
             If _currentStrategy Is Nothing Then
-                _chart.SetStrategyLabel(String.Empty)
+                UpdateStrategyApplyBadge()
                 _lastStrategyLogSignature = String.Empty
                 InitializeChartWithDefaults(_chart, _candles)
                 _chart.Invalidate()
                 Exit Sub
             End If
 
-            ' ½Ã¹Ä »óÅÂ º¸Á¸
+            ' ì‹œë®¬ ìƒíƒœ ë³´ì¡´
             Dim simOn As Boolean = False
             Dim simIndex As Integer = 0
             Try
@@ -440,10 +442,10 @@ Public Class Form1
             Catch
             End Try
 
-            ' ±âº» ÁöÇ¥ º¹¿ø (»ç¿ëÀÚ ±âº» ¼¼ÆÃ À¯Áö)
+            ' ê¸°ë³¸ ì§€í‘œ ë³µì› (ì‚¬ìš©ì ê¸°ë³¸ ì„¸íŒ… ìœ ì§€)
             InitializeChartWithDefaults(_chart, _candles)
 
-            ' Àü·« ½ÇÇà °á°ú Ä³½Ã È°¿ë
+            ' ì „ëµ ì‹¤í–‰ ê²°ê³¼ ìºì‹œ í™œìš©
             Dim allSignals As List(Of TradeSignal) = GetStrategySignals(_currentStrategy)
 
             Dim forceFullScope As Boolean = forceFull OrElse (chkDisplaySignals IsNot Nothing AndAlso chkDisplaySignals.Checked)
@@ -457,12 +459,12 @@ Public Class Form1
 
             Dim scopeLabel As String = If(forceFullScope, "Full Chart", If(useSimulationScope, "Simulation", "Full Chart"))
             If chkApplyStrategy IsNot Nothing AndAlso chkApplyStrategy.Checked Then
-                _chart.SetStrategyLabel($"{_currentStrategy.Name} [{scopeLabel}]")
+                UpdateStrategyApplyBadge(scopeLabel)
             Else
                 If chkDisplaySignals IsNot Nothing AndAlso chkDisplaySignals.Checked Then
                     chkDisplaySignals.Checked = False
                 End If
-                _chart.SetStrategyLabel(String.Empty)
+                UpdateStrategyApplyBadge()
             End If
 
             Dim limitIndex As Integer = -1
@@ -481,7 +483,7 @@ Public Class Form1
                 signals = filtered
             End If
 
-            ' ¸Å¼ö/¸Åµµ ÀÎµ¦½º ¼öÁı ? LINQ ¾øÀÌ
+            ' ë§¤ìˆ˜/ë§¤ë„ ì¸ë±ìŠ¤ ìˆ˜ì§‘ ? LINQ ì—†ì´
             Dim buyIdx As New List(Of Integer)
             Dim sellIdx As New List(Of Integer)
             For Each s In signals
@@ -523,11 +525,11 @@ Public Class Form1
                 _lastStrategyLogSignature = logSignature
             End If
 
-            ' ½ÅÈ£ ¿À¹ö·¹ÀÌ(½ºÄ³ÅÍ) Ãß°¡
+            ' ì‹ í˜¸ ì˜¤ë²„ë ˆì´(ìŠ¤ìºí„°) ì¶”ê°€
             Dim sigInd As IIndicator = New TradeSignalIndicator(buyIdx, sellIdx)
             _chart.AddIndicator(sigInd)
 
-            ' µ¥ÀÌÅÍ/½Ã¹Ä »óÅÂ º¹¿ø
+            ' ë°ì´í„°/ì‹œë®¬ ìƒíƒœ ë³µì›
             _chart.SetData(_candles)
             If simOn Then
                 _chart.SetSimulationMode(True)
@@ -536,7 +538,7 @@ Public Class Form1
 
             _chart.Invalidate()
         Catch
-            ' ÇÊ¿ä½Ã ·Î±ë
+            ' í•„ìš”ì‹œ ë¡œê¹…
         End Try
     End Sub
 
@@ -554,81 +556,145 @@ Public Class Form1
                     Dim syncSim As Boolean = (chkSimulation IsNot Nothing AndAlso chkSimulation.Checked AndAlso _applyMode = StrategyApplyMode.SimulationFollow)
                     RefreshStrategyOverlay(simulationSync:=syncSim, forceFull:=False)
                 Else
-                    _chart.SetStrategyLabel(String.Empty)
+                    UpdateStrategyApplyBadge()
                 End If
             End If
         Catch
         End Try
     End Sub
+
+#Region "ì „ëµ ë¼ë²¨ í‘œì‹œ/ìƒ‰ìƒ ì¼ì›í™” (Helper)"
+
+''' <summary>
+''' ì „ëµ ë¼ë²¨ í…ìŠ¤íŠ¸/ìƒ‰ìƒì„ ì¼ì›í™”í•´ì„œ ê°±ì‹ :
+''' - ì ìš© On:  "ì „ëµ ì ìš©: {ì´ë¦„} [Full Chart|Simulation]" + ë¹¨ê°„ìƒ‰
+''' - ì ìš© Off: "ì „ëµ ë¯¸ì ìš©" + íšŒìƒ‰(180,180,180)
+''' - scopeLabel ë¯¸ì§€ì • ì‹œ, í˜„ì¬ í† ê¸€/ì‹œë®¬ ìƒíƒœë¡œ ìë™ íŒë³„
+''' - ì°¨íŠ¸ê°€ SetStrategyLabelColor(Color)ë¥¼ ì œê³µí•˜ë©´ ë¦¬í”Œë ‰ì…˜ìœ¼ë¡œ í˜¸ì¶œ(ì—†ìœ¼ë©´ ì¡°ìš©íˆ íŒ¨ìŠ¤)
+''' </summary>
+Private Sub UpdateStrategyApplyBadge(Optional scopeLabel As String = Nothing)
+    Try
+        If _chart Is Nothing Then Exit Sub
+
+        Dim isOn As Boolean = (chkApplyStrategy IsNot Nothing AndAlso chkApplyStrategy.Checked)
+        Dim strategyName As String = String.Empty
+
+        If _currentStrategy IsNot Nothing AndAlso Not String.IsNullOrWhiteSpace(_currentStrategy.Name) Then
+            strategyName = _currentStrategy.Name
+        ElseIf cmbStrategy IsNot Nothing AndAlso cmbStrategy.SelectedIndex >= 0 Then
+            strategyName = CStr(cmbStrategy.SelectedItem)
+        End If
+
+        Dim labelText As String
+        If isOn AndAlso Not String.IsNullOrWhiteSpace(strategyName) Then
+            If String.IsNullOrWhiteSpace(scopeLabel) Then
+                Dim simOn As Boolean = (chkSimulation IsNot Nothing AndAlso chkSimulation.Checked)
+                Dim forceFull As Boolean = (chkDisplaySignals IsNot Nothing AndAlso chkDisplaySignals.Checked)
+                Dim useSimulation As Boolean = (simOn AndAlso (Not forceFull) AndAlso _applyMode = StrategyApplyMode.SimulationFollow)
+                scopeLabel = If(useSimulation, "Simulation", "Full Chart")
+            End If
+            labelText = $"ì „ëµ ì ìš©: {strategyName} [{scopeLabel}]"
+        Else
+            labelText = "ì „ëµ ë¯¸ì ìš©"
+        End If
+
+        _chart.SetStrategyLabel(labelText)
+
+        Dim labelColor As Color = If(isOn, Color.Red, Color.FromArgb(180, 180, 180))
+        TrySetChartStrategyLabelColor(labelColor)
+
+    Catch
+        ' UI íƒ€ì´ë° ì´ìŠˆëŠ” ë¬´ì‹œ
+    End Try
+End Sub
+
+''' <summary>
+''' ì°¨íŠ¸ ì»¨íŠ¸ë¡¤ì´ SetStrategyLabelColor(Color) APIë¥¼ ì œê³µí•˜ë©´ ìƒ‰ìƒ ì „ë‹¬(ì—†ìœ¼ë©´ ë¬´ì‹œ).
+''' </summary>
+Private Sub TrySetChartStrategyLabelColor(c As Color)
+    Try
+        Dim mi = _chart.GetType().GetMethod("SetStrategyLabelColor", BindingFlags.Instance Or BindingFlags.Public)
+        If mi IsNot Nothing Then
+            mi.Invoke(_chart, New Object() {c})
+        End If
+    Catch
+        ' ignore
+    End Try
+End Sub
+
+#End Region
+
+
+                                                                                            
 End Class
 
-' Form1.vb ³»ºÎÀÇ Module
+' Form1.vb ë‚´ë¶€ì˜ Module
 
-#Region "Form1 È®Àå ¸ğµâ"
+#Region "Form1 í™•ì¥ ëª¨ë“ˆ"
 
 Public Module Form1Helper
     ''' <summary>
-    ''' Àü¿ª ÁöÇ¥ ÀÎ½ºÅÏ½º Dictionary
-    ''' ÇÁ·Î±×·¥ ½ÇÇà Áß ¸ğµç ÁöÇ¥ ¼³Á¤À» ¿©±â¿¡ ÀúÀå
+    ''' ì „ì—­ ì§€í‘œ ì¸ìŠ¤í„´ìŠ¤ Dictionary
+    ''' í”„ë¡œê·¸ë¨ ì‹¤í–‰ ì¤‘ ëª¨ë“  ì§€í‘œ ì„¤ì •ì„ ì—¬ê¸°ì— ì €ì¥
     ''' </summary>
     Private _indicatorInstances As New Dictionary(Of String, IndicatorInstance)
 
     ''' <summary>
-    ''' ÁöÇ¥°¡ ÃÊ±âÈ­µÇ¾ú´ÂÁö ¿©ºÎ
+    ''' ì§€í‘œê°€ ì´ˆê¸°í™”ë˜ì—ˆëŠ”ì§€ ì—¬ë¶€
     ''' </summary>
     Private _isInitialized As Boolean = False
 
     ''' <summary>
-    ''' ÁöÇ¥ ÀÎ½ºÅÏ½º ÃÊ±âÈ­ º¸Àå
-    ''' ¼³Á¤ ÆÄÀÏÀÌ ÀÖÀ¸¸é ·Îµå, ¾øÀ¸¸é ±âº»°ª »ç¿ë
+    ''' ì§€í‘œ ì¸ìŠ¤í„´ìŠ¤ ì´ˆê¸°í™” ë³´ì¥
+    ''' ì„¤ì • íŒŒì¼ì´ ìˆìœ¼ë©´ ë¡œë“œ, ì—†ìœ¼ë©´ ê¸°ë³¸ê°’ ì‚¬ìš©
     ''' </summary>
     Private Sub EnsureIndicatorsInitialized()
-        ' ÀÌ¹Ì ÃÊ±âÈ­µÇ¾úÀ¸¸é °Ç³Ê¶Ü
+        ' ì´ë¯¸ ì´ˆê¸°í™”ë˜ì—ˆìœ¼ë©´ ê±´ë„ˆëœ€
         If _isInitialized Then
             Return
         End If
 
-        ' 1. INI ÆÄÀÏ¿¡¼­ ¼³Á¤ ·Îµå ½Ãµµ
+        ' 1. INI íŒŒì¼ì—ì„œ ì„¤ì • ë¡œë“œ ì‹œë„
         Dim loadedSettings = ChartSettingsManager.Instance.LoadIndicatorSettings()
 
         If loadedSettings IsNot Nothing AndAlso loadedSettings.Count > 0 Then
-            ' ÀúÀåµÈ ¼³Á¤ÀÌ ÀÖÀ¸¸é »ç¿ë
+            ' ì €ì¥ëœ ì„¤ì •ì´ ìˆìœ¼ë©´ ì‚¬ìš©
             _indicatorInstances = loadedSettings
-            Logger.Instance.log($"ÁöÇ¥ ¼³Á¤ ·Îµå: {_indicatorInstances.Count}°³")
+            Logger.Instance.log($"ì§€í‘œ ì„¤ì • ë¡œë“œ: {_indicatorInstances.Count}ê°œ")
         Else
-            ' ÀúÀåµÈ ¼³Á¤ÀÌ ¾øÀ¸¸é ±âº»°ª »ç¿ë
+            ' ì €ì¥ëœ ì„¤ì •ì´ ì—†ìœ¼ë©´ ê¸°ë³¸ê°’ ì‚¬ìš©
             Dim defaults = DefaultIndicators.GetDefaultIndicators()
 
             For Each defaultInd In defaults
                 Dim key = defaultInd.GetKey()
                 _indicatorInstances(key) = defaultInd
             Next
-            Logger.Instance.log($"±âº» ÁöÇ¥ ·Îµå: {_indicatorInstances.Count}°³")
+            Logger.Instance.log($"ê¸°ë³¸ ì§€í‘œ ë¡œë“œ: {_indicatorInstances.Count}ê°œ")
         End If
 
         _isInitialized = True
     End Sub
 
     ''' <summary>
-    ''' Â÷Æ® ÃÊ±âÈ­ ¹× ÁöÇ¥ Àû¿ë
+    ''' ì°¨íŠ¸ ì´ˆê¸°í™” ë° ì§€í‘œ ì ìš©
     ''' </summary>
-    ''' <param name="chart">Â÷Æ® ÄÁÆ®·Ñ</param>
-    ''' <param name="candles">Äµµé µ¥ÀÌÅÍ</param>
+    ''' <param name="chart">ì°¨íŠ¸ ì»¨íŠ¸ë¡¤</param>
+    ''' <param name="candles">ìº”ë“¤ ë°ì´í„°</param>
     Public Sub InitializeChartWithDefaults(chart As HighPerformanceChartControl, candles As List(Of CandleInfo))
-        ' Äµµé µ¥ÀÌÅÍÀÇ ±âº» ÁöÇ¥ °è»ê (SMA, EMA, RSI, MACD µî)
+        ' ìº”ë“¤ ë°ì´í„°ì˜ ê¸°ë³¸ ì§€í‘œ ê³„ì‚° (SMA, EMA, RSI, MACD ë“±)
         IndicatorManager.CalculateBasicIndicators(candles)
 
-        ' ÁöÇ¥ ÃÊ±âÈ­ (¼³Á¤ ÆÄÀÏ ·Îµå ¶Ç´Â ±âº»°ª)
+        ' ì§€í‘œ ì´ˆê¸°í™” (ì„¤ì • íŒŒì¼ ë¡œë“œ ë˜ëŠ” ê¸°ë³¸ê°’)
         EnsureIndicatorsInitialized()
 
-        ' Â÷Æ® ÃÊ±âÈ­ (±âÁ¸ ÁöÇ¥ ¸ğµÎ Á¦°Å)
+        ' ì°¨íŠ¸ ì´ˆê¸°í™” (ê¸°ì¡´ ì§€í‘œ ëª¨ë‘ ì œê±°)
         chart.ClearIndicators()
 
-        ' È°¼ºÈ­µÈ ÁöÇ¥¸¸ Â÷Æ®¿¡ Ãß°¡
+        ' í™œì„±í™”ëœ ì§€í‘œë§Œ ì°¨íŠ¸ì— ì¶”ê°€
         Dim addedCount As Integer = 0
         For Each kvp In _indicatorInstances.OrderBy(Function(k) k.Value.ZOrder)
             If kvp.Value.IsVisible Then
-                ' ÁöÇ¥ »ı¼º (¼³Á¤ Àû¿ëµÊ)
+                ' ì§€í‘œ ìƒì„± (ì„¤ì • ì ìš©ë¨)
                 Dim indicator = kvp.Value.CreateIndicator()
 
                 If indicator IsNot Nothing Then
@@ -638,38 +704,38 @@ Public Module Form1Helper
             End If
         Next
 
-        ' Äµµé µ¥ÀÌÅÍ¸¦ Â÷Æ®¿¡ ¼³Á¤
+        ' ìº”ë“¤ ë°ì´í„°ë¥¼ ì°¨íŠ¸ì— ì„¤ì •
         chart.SetData(candles)
 
-        Logger.Instance.log($"Â÷Æ® ÃÊ±âÈ­ ¿Ï·á: {addedCount}°³ ÁöÇ¥ Àû¿ë")
+        Logger.Instance.log($"ì°¨íŠ¸ ì´ˆê¸°í™” ì™„ë£Œ: {addedCount}ê°œ ì§€í‘œ ì ìš©")
     End Sub
 
     ''' <summary>
-    ''' ÁöÇ¥ °ü¸® ´ÙÀÌ¾ó·Î±× Ç¥½Ã
+    ''' ì§€í‘œ ê´€ë¦¬ ë‹¤ì´ì–¼ë¡œê·¸ í‘œì‹œ
     ''' </summary>
-    ''' <param name="chart">Â÷Æ® ÄÁÆ®·Ñ</param>
+    ''' <param name="chart">ì°¨íŠ¸ ì»¨íŠ¸ë¡¤</param>
     Public Sub ShowIndicatorDialog(chart As HighPerformanceChartControl)
-        ' ÁöÇ¥ ÃÊ±âÈ­ º¸Àå
+        ' ì§€í‘œ ì´ˆê¸°í™” ë³´ì¥
         EnsureIndicatorsInitialized()
 
-        ' ÁöÇ¥ °ü¸® ´ÙÀÌ¾ó·Î±× Ç¥½Ã (¸ğ´Ş)
+        ' ì§€í‘œ ê´€ë¦¬ ë‹¤ì´ì–¼ë¡œê·¸ í‘œì‹œ (ëª¨ë‹¬)
         Using dialog As New frmEnhancedChartDialog(chart, _indicatorInstances)
             dialog.ShowDialog()
         End Using
 
-        ' ? Áß¿ä: ´ÙÀÌ¾ó·Î±× ´İÀ» ¶§ ÀÚµ¿À¸·Î ¼³Á¤ ÀúÀå
+        ' ? ì¤‘ìš”: ë‹¤ì´ì–¼ë¡œê·¸ ë‹«ì„ ë•Œ ìë™ìœ¼ë¡œ ì„¤ì • ì €ì¥
         SaveCurrentSettings()
     End Sub
 
     ''' <summary>
-    ''' ÇöÀç ÁöÇ¥ ¼³Á¤À» INI ÆÄÀÏ¿¡ ÀúÀå
+    ''' í˜„ì¬ ì§€í‘œ ì„¤ì •ì„ INI íŒŒì¼ì— ì €ì¥
     ''' </summary>
     Public Sub SaveCurrentSettings()
         ChartSettingsManager.Instance.SaveIndicatorSettings(_indicatorInstances)
     End Sub
 
     ''' <summary>
-    ''' ÁöÇ¥ ÀÎ½ºÅÏ½º Dictionary °¡Á®¿À±â
+    ''' ì§€í‘œ ì¸ìŠ¤í„´ìŠ¤ Dictionary ê°€ì ¸ì˜¤ê¸°
     ''' </summary>
     Public Function GetIndicatorInstances() As Dictionary(Of String, IndicatorInstance)
         EnsureIndicatorsInitialized()
@@ -677,109 +743,109 @@ Public Module Form1Helper
     End Function
 
     ''' <summary>
-    ''' ¼³Á¤ ¸®¼Â (±âº»°ªÀ¸·Î µÇµ¹¸²)
+    ''' ì„¤ì • ë¦¬ì…‹ (ê¸°ë³¸ê°’ìœ¼ë¡œ ë˜ëŒë¦¼)
     ''' </summary>
     Public Sub ResetToDefaults()
-        ' INI ÆÄÀÏ »èÁ¦
+        ' INI íŒŒì¼ ì‚­ì œ
         ChartSettingsManager.Instance.ResetSettings()
 
-        ' ¸Ş¸ğ¸® ÃÊ±âÈ­
+        ' ë©”ëª¨ë¦¬ ì´ˆê¸°í™”
         _indicatorInstances.Clear()
         _isInitialized = False
 
-        ' ±âº»°ªÀ¸·Î ÀçÃÊ±âÈ­
+        ' ê¸°ë³¸ê°’ìœ¼ë¡œ ì¬ì´ˆê¸°í™”
         EnsureIndicatorsInitialized()
 
-        Logger.Instance.log("¼³Á¤ ¸®¼Â ¿Ï·á")
+        Logger.Instance.log("ì„¤ì • ë¦¬ì…‹ ì™„ë£Œ")
     End Sub
 
     ''' <summary>
-    ''' Æ½ µ¥ÀÌÅÍ¸¦ ºĞºÀÀ¸·Î º¯È¯
+    ''' í‹± ë°ì´í„°ë¥¼ ë¶„ë´‰ìœ¼ë¡œ ë³€í™˜
     ''' </summary>
     Public Function AggregateToMinuteCandles(tickCandles As List(Of Candle), interval As Integer) As List(Of CandleInfo)
-        Logger.Instance.log($"=== ºĞºÀ º¯È¯ ½ÃÀÛ: {interval}ºĞºÀ ===")
+        Logger.Instance.log($"=== ë¶„ë´‰ ë³€í™˜ ì‹œì‘: {interval}ë¶„ë´‰ ===")
 
         Dim minuteCandles As New List(Of CandleInfo)
         If tickCandles.Count = 0 Then Return minuteCandles
 
-        ' ½Ã°£´ëº°·Î ±×·ìÈ­
+        ' ì‹œê°„ëŒ€ë³„ë¡œ ê·¸ë£¹í™”
         Dim groupedTicks = tickCandles.GroupBy(Function(t)
-                                                   ' ±âÁØ ½Ã°£ (½ÃÀÛ ½Ã°¢)
+                                                   ' ê¸°ì¤€ ì‹œê°„ (ì‹œì‘ ì‹œê°)
                                                    Dim baseTime = New DateTime(t.Timestamp.Year, t.Timestamp.Month, t.Timestamp.Day, t.Timestamp.Hour, 0, 0)
-                                                   ' ºĞ ±×·ì (¿¹: 5ºĞºÀÀÌ¸é 0, 5, 10, 15, ...)
+                                                   ' ë¶„ ê·¸ë£¹ (ì˜ˆ: 5ë¶„ë´‰ì´ë©´ 0, 5, 10, 15, ...)
                                                    Dim minuteGroup = (t.Timestamp.Minute \ interval) * interval
                                                    Return baseTime.AddMinutes(minuteGroup)
                                                End Function).OrderBy(Function(g) g.Key)
 
-        ' °¢ ±×·ìÀ» ÇÏ³ªÀÇ Äµµé·Î º¯È¯
+        ' ê° ê·¸ë£¹ì„ í•˜ë‚˜ì˜ ìº”ë“¤ë¡œ ë³€í™˜
         For Each group In groupedTicks
             Dim ticks = group.OrderBy(Function(t) t.Timestamp).ToList()
 
-            ' Äµµé Á¤º¸ »ı¼º
+            ' ìº”ë“¤ ì •ë³´ ìƒì„±
             Dim candleInfo As New CandleInfo With {
-                .Timestamp = group.Key,                          ' ±×·ìÀÇ ½ÃÀÛ ½Ã°£
-                .Open = ticks.First().Open,                      ' Ã¹ Æ½ÀÇ ½Ã°¡
-                .High = ticks.Max(Function(t) t.High),           ' ÃÖ°í°¡
-                .Low = ticks.Min(Function(t) t.Low),             ' ÃÖÀú°¡
-                .Close = ticks.Last().Close,                     ' ¸¶Áö¸· Æ½ÀÇ Á¾°¡
-                .Volume = ticks.Sum(Function(t) t.Volume),       ' °Å·¡·® ÇÕ°è
-                .timeframe = $"m{interval}",                     ' Å¸ÀÓÇÁ·¹ÀÓ Ç¥½Ã
-                .tickCount = ticks.Count                         ' ÀÌ ÄµµéÀ» ±¸¼ºÇÑ Æ½ °³¼ö
+                .Timestamp = group.Key,                          ' ê·¸ë£¹ì˜ ì‹œì‘ ì‹œê°„
+                .Open = ticks.First().Open,                      ' ì²« í‹±ì˜ ì‹œê°€
+                .High = ticks.Max(Function(t) t.High),           ' ìµœê³ ê°€
+                .Low = ticks.Min(Function(t) t.Low),             ' ìµœì €ê°€
+                .Close = ticks.Last().Close,                     ' ë§ˆì§€ë§‰ í‹±ì˜ ì¢…ê°€
+                .Volume = ticks.Sum(Function(t) t.Volume),       ' ê±°ë˜ëŸ‰ í•©ê³„
+                .timeframe = $"m{interval}",                     ' íƒ€ì„í”„ë ˆì„ í‘œì‹œ
+                .tickCount = ticks.Count                         ' ì´ ìº”ë“¤ì„ êµ¬ì„±í•œ í‹± ê°œìˆ˜
             }
 
-            ' Äµµé ÆĞÅÏ Á¤º¸ °è»ê
+            ' ìº”ë“¤ íŒ¨í„´ ì •ë³´ ê³„ì‚°
             candleInfo.CalculateCandleInfo()
             minuteCandles.Add(candleInfo)
         Next
 
-        ' ÀÌµ¿Æò±Õ, RSI µî °è»ê
+        ' ì´ë™í‰ê· , RSI ë“± ê³„ì‚°
         IndicatorManager.CalculateBasicIndicators(minuteCandles)
 
-        Logger.Instance.log($"ºĞºÀ º¯È¯ ¿Ï·á: {minuteCandles.Count}°³")
+        Logger.Instance.log($"ë¶„ë´‰ ë³€í™˜ ì™„ë£Œ: {minuteCandles.Count}ê°œ")
         Return minuteCandles
     End Function
 
     ''' <summary>
-    ''' Æ½ µ¥ÀÌÅÍ¸¦ Æ½ºÀÀ¸·Î º¯È¯
+    ''' í‹± ë°ì´í„°ë¥¼ í‹±ë´‰ìœ¼ë¡œ ë³€í™˜
     ''' </summary>
     Public Function AggregateToTickCandles(tickCandles As List(Of Candle), interval As Integer) As List(Of CandleInfo)
-        Logger.Instance.log($"=== Æ½ºÀ º¯È¯ ½ÃÀÛ: {interval}Æ½ºÀ ===")
+        Logger.Instance.log($"=== í‹±ë´‰ ë³€í™˜ ì‹œì‘: {interval}í‹±ë´‰ ===")
 
         Dim resultCandles As New List(Of CandleInfo)
         If tickCandles.Count = 0 Then Return resultCandles
 
         Dim tickGroup As New List(Of Candle)
 
-        ' N°³ÀÇ Æ½À» ÇÏ³ªÀÇ Äµµé·Î ¹­±â
+        ' Nê°œì˜ í‹±ì„ í•˜ë‚˜ì˜ ìº”ë“¤ë¡œ ë¬¶ê¸°
         For i As Integer = 0 To tickCandles.Count - 1
             tickGroup.Add(tickCandles(i))
 
-            ' interval °³¼ö¸¸Å­ ¸ğÀÌ°Å³ª, ¸¶Áö¸· Æ½ÀÌ¸é Äµµé »ı¼º
+            ' interval ê°œìˆ˜ë§Œí¼ ëª¨ì´ê±°ë‚˜, ë§ˆì§€ë§‰ í‹±ì´ë©´ ìº”ë“¤ ìƒì„±
             If tickGroup.Count >= interval OrElse i = tickCandles.Count - 1 Then
                 Dim candleInfo As New CandleInfo With {
-                    .Timestamp = tickGroup.First().Timestamp,        ' Ã¹ Æ½ÀÇ ½Ã°£
-                    .Open = tickGroup.First().Open,                  ' Ã¹ Æ½ÀÇ ½Ã°¡
-                    .High = tickGroup.Max(Function(t) t.High),       ' ÃÖ°í°¡
-                    .Low = tickGroup.Min(Function(t) t.Low),         ' ÃÖÀú°¡
-                    .Close = tickGroup.Last().Close,                 ' ¸¶Áö¸· Æ½ÀÇ Á¾°¡
-                    .Volume = tickGroup.Sum(Function(t) t.Volume),   ' °Å·¡·® ÇÕ°è
-                    .timeframe = $"T{interval}",                     ' Å¸ÀÓÇÁ·¹ÀÓ Ç¥½Ã
-                    .tickCount = tickGroup.Count                     ' ½ÇÁ¦ Æ½ °³¼ö
+                    .Timestamp = tickGroup.First().Timestamp,        ' ì²« í‹±ì˜ ì‹œê°„
+                    .Open = tickGroup.First().Open,                  ' ì²« í‹±ì˜ ì‹œê°€
+                    .High = tickGroup.Max(Function(t) t.High),       ' ìµœê³ ê°€
+                    .Low = tickGroup.Min(Function(t) t.Low),         ' ìµœì €ê°€
+                    .Close = tickGroup.Last().Close,                 ' ë§ˆì§€ë§‰ í‹±ì˜ ì¢…ê°€
+                    .Volume = tickGroup.Sum(Function(t) t.Volume),   ' ê±°ë˜ëŸ‰ í•©ê³„
+                    .timeframe = $"T{interval}",                     ' íƒ€ì„í”„ë ˆì„ í‘œì‹œ
+                    .tickCount = tickGroup.Count                     ' ì‹¤ì œ í‹± ê°œìˆ˜
                 }
 
-                ' Äµµé ÆĞÅÏ Á¤º¸ °è»ê
+                ' ìº”ë“¤ íŒ¨í„´ ì •ë³´ ê³„ì‚°
                 candleInfo.CalculateCandleInfo()
                 resultCandles.Add(candleInfo)
 
-                ' ´ÙÀ½ ±×·ìÀ» À§ÇØ ÃÊ±âÈ­
+                ' ë‹¤ìŒ ê·¸ë£¹ì„ ìœ„í•´ ì´ˆê¸°í™”
                 tickGroup.Clear()
             End If
         Next
 
-        ' ÀÌµ¿Æò±Õ, RSI µî °è»ê
+        ' ì´ë™í‰ê· , RSI ë“± ê³„ì‚°
         IndicatorManager.CalculateBasicIndicators(resultCandles)
 
-        Logger.Instance.log($"Æ½ºÀ º¯È¯ ¿Ï·á: {resultCandles.Count}°³")
+        Logger.Instance.log($"í‹±ë´‰ ë³€í™˜ ì™„ë£Œ: {resultCandles.Count}ê°œ")
         Return resultCandles
     End Function
 End Module
